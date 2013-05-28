@@ -35,8 +35,26 @@ function TcpHeader(opts, offset) {
            : Object.create(TcpHeader.prototype);
 
   opts = opts || {};
+  opts.flags = opts.flags || {};
 
-  // TODO: initialize defaults
+  self.srcPort = ~~opts.srcPort;
+  self.dstPort = ~~opts.dstPort;
+  self.seq = ~~opts.seq;
+  self.ack = ~~opts.ack;
+  self.flags = {
+    fin: !!opts.flags.fin,
+    syn: !!opts.flags.syn,
+    rst: !!opts.flags.rst,
+    psh: !!opts.flags.psh,
+    ack: !!opts.flags.ack,
+    urg: !!opts.flags.urg
+  };
+  self.window = ~~opts.window;
+  self.checksum = ~~opts.checksum;
+  self.urgent = ~~opts.urgent;
+  self.length = ~~opts.headerLength;
+
+  // TODO: initialize TCP options
 
   return self;
 };
@@ -44,9 +62,49 @@ function TcpHeader(opts, offset) {
 TcpHeader.fromBuffer = function(buf, offset) {
   offset = ~~offset;
 
-  // TODO: implement fromBuffer
+  var srcPort = buf.readUInt16BE(offset);
+  offset += 2;
 
-  return new TcpHeader();
+  var dstPort = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var seq = buf.readUInt32BE(offset);
+  offset += 4;
+
+  var ack = buf.readUInt32BE(offset);
+  offset += 4;
+
+  var tmp = buf.readUInt8(offset);
+  offset += 1;
+
+  var headerLength = ((tmp & 0xf0) >> 4) * 4;
+
+  tmp = buf.readUInt8(offset);
+  offset += 1;
+
+  var flags = {
+    fin: !!(tmp & 0x01),
+    syn: !!(tmp & 0x02),
+    rst: !!(tmp & 0x04),
+    psh: !!(tmp & 0x08),
+    ack: !!(tmp & 0x10),
+    urg: !!(tmp & 0x20)
+  };
+
+  var window = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var checksum = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var urgent = buf.readUInt16BE(offset);
+  offset += 2;
+
+  // TODO: parse options
+
+  return new TcpHeader({srcPort: srcPort, dstPort: dstPort, seq: seq, ack: ack,
+                        flags: flags, window: window, checksum: checksum,
+                        urgent: urgent, length: headerLength});
 };
 
 TcpHeader.prototype.toBuffer = function(buf, offset) {
@@ -56,4 +114,8 @@ TcpHeader.prototype.toBuffer = function(buf, offset) {
   // TODO: implement toBuffer
 
   return buf;
+};
+
+TcpHeader.prototype.setChecksum = function(iph, buf, offset) {
+  // TODO: implement setChecksum
 };

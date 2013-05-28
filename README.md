@@ -11,9 +11,24 @@ var TcpHeader = require('tcp-header');
 
 // parse TCP headers in
 var tcph = new TcpHeader(inputBuf, inputOffset);
-tcph.srcPort === 52;
+tcph.srcPort === 22;
 tcph.dstPort === 5432;
-// TODO: flags, seq, ack, window, options
+tcph.flags.syn === true;  // flags as booleans in nested flags property
+tcph.flags.ack === true;
+tcph.flags.fin === false;
+tcph.flags.rst === false;
+tcph.flags.urg === false;
+tcph.flags.psh === false;
+tcph.seq === 12345678;
+tcph.ack === 12345677;
+tcph.window === 10000;    // window size
+tcph.checksum === 0xabcd; // checksum as-is from buffer
+tcph.urgent === 0;        // flags.urg is false
+tcph.length === 20;       // TCP header size in bytes
+
+// NOTE: you need the IP header to calculate the overall data payload size.
+
+// TODO: support for TCP options
 
 // write UDP headers out
 var out = tcph.toBuffer();
