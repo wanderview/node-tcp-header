@@ -66,7 +66,12 @@ function TcpHeader(opts, offset) {
 
   var calcLength = 20;
   for (var i in self.options) {
-    calcLength += self.options[i].value.length + 1;
+    var option = self.options[i];
+    if (option.kind === 1) {
+      calcLength += 1;
+      continue;
+    }
+    calcLength += option.value.length + 2;
   }
   if (self.options.length) calcLength += 1;
 
