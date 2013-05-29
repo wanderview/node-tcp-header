@@ -47,20 +47,41 @@ function TcpHeader(opts, offset) {
     rst: !!opts.flags.rst,
     psh: !!opts.flags.psh,
     ack: !!opts.flags.ack,
-    urg: !!opts.flags.urg
+    urg: !!opts.flags.urg,
+    ece: !!opts.flags.ece,
+    cwr: !!opts.flags.cwr,
+    ns:  !!opts.flags.ns
   };
   self.window = ~~opts.window;
   self.checksum = ~~opts.checksum;
   self.urgent = ~~opts.urgent;
-  self.length = ~~opts.headerLength;
+  self.options = opts.options || [];
 
-  // TODO: initialize TCP options
+  self.length = opts.length || 20;
+
+  if (self.length < 20) {
+    throw new Error("Illegal TCP header length '" + self.length +
+                    "'. Must be 20 bytes or more.");
+  }
+
+  var calcLength = 20;
+  for (var i in self.options) {
+    calcLength += self.options[i].value.length + 1;
+  }
+  if (self.options.length) calcLength += 1;
+
+  if (self.length !== calcLength) {
+    throw new Error("Illegal TCP header length '" + self.length +
+                    "'. Expected '" + calcLength + "' for given TCP options.");
+  }
 
   return self;
 };
 
 TcpHeader.fromBuffer = function(buf, offset) {
   offset = ~~offset;
+
+  var startOffset = offset;
 
   var srcPort = buf.readUInt16BE(offset);
   offset += 2;
@@ -78,6 +99,7 @@ TcpHeader.fromBuffer = function(buf, offset) {
   offset += 1;
 
   var headerLength = ((tmp & 0xf0) >> 4) * 4;
+  var ns = !!(tmp & 0x01);
 
   tmp = buf.readUInt8(offset);
   offset += 1;
@@ -88,7 +110,10 @@ TcpHeader.fromBuffer = function(buf, offset) {
     rst: !!(tmp & 0x04),
     psh: !!(tmp & 0x08),
     ack: !!(tmp & 0x10),
-    urg: !!(tmp & 0x20)
+    urg: !!(tmp & 0x20),
+    ece: !!(tmp & 0x40),
+    cwr: !!(tmp & 0x80),
+    ns:  ns
   };
 
   var window = buf.readUInt16BE(offset);
@@ -100,18 +125,95 @@ TcpHeader.fromBuffer = function(buf, offset) {
   var urgent = buf.readUInt16BE(offset);
   offset += 2;
 
-  // TODO: parse options
+  var options = [];
+
+  while (offset < (headerLength - startOffset)) {
+    var kind = buf.readUInt8(offset);
+    offset += 1;
+    var value = null;
+    if (kind === 0) {
+      break;
+    } else if (kind === 1) {
+      value = new Buffer(0);
+    } else {
+      var optionLength = buf.readUInt8(offset);
+      offset += 1;
+      var value = buf.slice(offset, offset + optionLength - 2);
+    }
+    options.push({kind: kind, value: value});
+  }
 
   return new TcpHeader({srcPort: srcPort, dstPort: dstPort, seq: seq, ack: ack,
                         flags: flags, window: window, checksum: checksum,
-                        urgent: urgent, length: headerLength});
+                        urgent: urgent, options: options,
+                        length: headerLength});
 };
 
 TcpHeader.prototype.toBuffer = function(buf, offset) {
   offset = ~~offset;
   buf = (buf instanceof Buffer) ? buf : new Buffer(offset + LENGTH);
 
-  // TODO: implement toBuffer
+  var startOffset = offset;
+
+  buf.writeUInt16BE(this.srcPort, offset);
+  offset += 2;
+
+  buf.writeUInt16BE(this.dstPort, offset);
+  offset += 2;
+
+  buf.writeUInt32BE(this.seq, offset);
+  offset += 4;
+
+  buf.writeUInt32BE(this.ack, offset);
+  offset += 4;
+
+  var tmp = ((this.length / 4) & 0x0f) << 4;
+  if (this.flags.ns) tmp |= 0x01;
+  buf.writeUInt8(tmp, offset);
+  offset += 1;
+
+  tmp = 0;
+  if (this.flags.fin) tmp |= 0x01;
+  if (this.flags.syn) tmp |= 0x02;
+  if (this.flags.rst) tmp |= 0x04;
+  if (this.flags.psh) tmp |= 0x08;
+  if (this.flags.ack) tmp |= 0x10;
+  if (this.flags.urg) tmp |= 0x20;
+  if (this.flags.ece) tmp |= 0x40;
+  if (this.flags.cwr) tmp |= 0x80;
+  buf.writeUInt8(tmp, offset);
+  offset += 1;
+
+  buf.writeUInt16BE(this.window, offset);
+  offset += 2;
+
+  buf.writeUInt16BE(this.checksum, offset);
+  offset += 2;
+
+  buf.writeUInt16BE(this.urgent, offset);
+  offset += 2;
+
+  for (var i in this.options) {
+    var option = this.options[i];
+
+    buf.writeUInt8(option.kind, offset);
+    offset += 1;
+
+    if (option.kind === 1) {
+      continue;
+    }
+
+    var optionLength = 2 + option.value.length;
+    buf.writeUInt8(optionLength, offset);
+    offset += 1;
+
+    option.value.copy(buf, offset);
+    offset += option.value.length;
+  }
+  if (this.options.length) {
+    buf.writeUInt8(0, offset);
+    offset += 1;
+  }
 
   return buf;
 };

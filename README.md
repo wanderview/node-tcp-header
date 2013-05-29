@@ -19,6 +19,9 @@ tcph.flags.fin === false;
 tcph.flags.rst === false;
 tcph.flags.urg === false;
 tcph.flags.psh === false;
+tcph.flags.ece === false;
+tcph.flags.cwr === false;
+tcph.flags.ns  === false;
 tcph.seq === 12345678;
 tcph.ack === 12345677;
 tcph.window === 10000;    // window size
